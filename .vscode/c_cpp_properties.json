@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "SDCCZ80",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:/Program Files (x86)/SDCC/include",
+                "C:/Program Files (x86)/SDCC/include/z180"
+            ],
+            "defines": [
+                "_DEBUG"
+            ],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-arm",
+            "mergeConfigurations": false,
+            "recursiveIncludes": {},
+            "compilerPath": "arm-none-eabi-gcc",
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "forcedInclude": [
+                "lint_sdcc.h"
+            ]
+        }
+    ],
+    "version": 4
+}
