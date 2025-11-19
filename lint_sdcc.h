@@ -23,6 +23,7 @@
 #define __using(x)
 #define __at(x)
 #define __naked
+#define __preserves_regs(...)
 
 // for pic
 

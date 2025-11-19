@@ -52,14 +52,17 @@ init:
 	out0    (#0x39), a        ; BBR = 0x00
 	;; Bank area phy = 0x00000
 
+							; Clear INT/TRAP Control Register (ITC)
+	out0 	(#0x34), a		; Disable all external interrupts.
+
 	; CBR
 	ld      a, #0x80
 	out0    (#0x38), a        ; CBR = 0x80
 
 	;; Set stack pointer directly above top of memory.
-	ld	sp,#0x80ff
+	ld	sp,#0xffff
 
-	;call	___sdcc_external_startup
+	call	___sdcc_external_startup
 
 	;; Initialise global variables. Skip if __sdcc_external_startup returned
 	;; non-zero value. Note: calling convention version 1 only.

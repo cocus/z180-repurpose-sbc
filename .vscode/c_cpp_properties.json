@@ -8,7 +8,8 @@
                 "C:/Program Files (x86)/SDCC/include/z180"
             ],
             "defines": [
-                "_DEBUG"
+                "_DEBUG",
+                "__CPU_CLOCK=18432000"
             ],
             "cStandard": "c17",
             "cppStandard": "c++17",
@@ -20,7 +21,8 @@
                 "limitSymbolsToIncludedHeaders": true
             },
             "forcedInclude": [
-                "lint_sdcc.h"
+                "lint_sdcc.h",
+                "FreeRTOSConfig.h"
             ]
         }
     ],

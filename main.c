@@ -204,6 +204,50 @@ void lcd_put_hex2(const unsigned char h)
     lcd_put_hex1(h & 0xf);
 }
 
+
+/* Scheduler include files. */
+#include <FreeRTOS.h>
+#include <timers.h>
+
+/*-----------------------------------------------------------*/
+static void TaskBlinkGreenLED(void *pvParameters)
+{
+    (void) pvParameters;
+
+    TickType_t xLastWakeTime;
+    /* The xLastWakeTime variable needs to be initialised with the current tick
+    count.  Note that this is the only time we access this variable.  From this
+    point on xLastWakeTime is managed automatically by the xTaskDelayUntil()
+    API function. */
+    xLastWakeTime = xTaskGetTickCount();
+
+    asci1_puts("Hi from task TaskBlinkGreenLED\n");
+
+
+    for(;;)
+    {
+        CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
+
+        xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
+
+        asci1_puts("Tick tick tick!\n");
+        CNTLA0 |= CNTLA0_RTS0; // /RTS0 = 1, LED off
+
+        xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
+
+        //printf("xTaskGetTickCount %u\r\n", xTaskGetTickCount());
+        //printf("GreenLED HighWater @ %u\r\n", uxTaskGetStackHighWaterMark(NULL));
+    }
+}
+
+void int_init(void)
+{
+    /* Table starts at 0xffe0 */
+    __asm__("ld a, #0xff    \n"\
+            "ld i, a        \n");
+    IL = 0xe0;
+}
+
 void main (void)
 {
     asci0_init();
@@ -218,13 +262,30 @@ void main (void)
     lcd_setCursor(1, 0);
     lcd_print(__DATE__ " " __TIME__);
 
+    /* Setup the interrupt vector table addresses in RAM */
+    int_init();
+
+    /* I've connected an LED from Vcc to /RTS0 (free GPIO!) */
+    CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
+
+
+    asci1_puts("Creating task\n");
+    BaseType_t res = xTaskCreate(
+        TaskBlinkGreenLED
+        ,  "GreenLED"
+        ,  128
+        ,  NULL
+        ,  2
+        ,  NULL ); //
+    asci1_puts("Created, ret = 0x"); asci1_put_hex2(res); asci1_putc('\n');
+    asci1_puts("Jumping in\n");
+    vTaskStartScheduler();
+
     while (1)
     {
-        CNTLA0 &= ~(CNTLA0_RTS0); // /RTS = 0, LED on
 
         asci1_puts("Tick tick tick!\n");
 
-        CNTLA0 |= CNTLA0_RTS0; // /RTS = 1, LED off
 
         delay_ms(300);
     }
