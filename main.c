@@ -177,13 +177,31 @@ static void TaskBlinkGreenLED(void *pvParameters)
 
         xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
 
-        printf("Tick tick tick %d!\n", xLastWakeTime);
+        //printf("Tick tick tick %d!\n", xLastWakeTime);
         CNTLA0 |= CNTLA0_RTS0; // /RTS0 = 1, LED off
 
         xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
 
         //printf("xTaskGetTickCount %u\r\n", xTaskGetTickCount());
         //printf("GreenLED HighWater @ %u\r\n", uxTaskGetStackHighWaterMark(NULL));
+    }
+}
+static void TaskUartServer(void *pvParameters)
+{
+    (void) pvParameters;
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    for(;;)
+    {
+        xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 50 ) );
+
+        if ((STAT1 & STAT1_RDRF) == 0)
+        {
+            continue;
+        }
+
+        // echo it back
+        printf("%c", getchar());
     }
 }
 
@@ -223,6 +241,14 @@ void main (void)
         ,  128
         ,  NULL
         ,  2
+        ,  NULL ); //
+    printf("Created, ret = 0x%.2x\n", res);
+    res = xTaskCreate(
+        TaskUartServer
+        ,  "UARTServer"
+        ,  128
+        ,  NULL
+        ,  1
         ,  NULL ); //
     printf("Created, ret = 0x%.2x\n", res);
     printf("Jumping in\n");
