@@ -1,7 +1,7 @@
 #include <z180.h>
 #include <stdint.h>
 #include "z180_internal.h"
-
+#include <stdio.h>
 
 /**
  * Standard HD44780 LCD at IO port 0x40 and 0x41. R/S connected directly to Z180's A0.
@@ -14,32 +14,6 @@ void asci0_putc(char c)
 {
     while ((STAT0 & STAT0_TDRE) == 0) ; // wait for TX buffer empty
     TDR0 = c;
-}
-
-void asci0_puts(const char* s)
-{
-    while(*s)
-    {
-        asci0_putc(*s++);
-    }
-}
-
-void asci0_put_hex1(const unsigned char n)
-{
-    if (n < 10)
-    {
-        asci0_putc(n + '0');
-    }
-    else
-    {
-        asci0_putc(n + 'A' - 10);
-    }
-}
-
-void asci0_put_hex2(const unsigned char h)
-{
-    asci0_put_hex1(h >> 4);
-    asci0_put_hex1(h & 0xf);
 }
 
 char asci0_getc(void)
@@ -66,42 +40,15 @@ void asci0_init(void)
     (void)STAT0;
 }
 
-
-
-
-void asci1_putc(char c)
+/* for sdcc's printf */
+int putchar (int c)
 {
     while ((STAT1 & STAT1_TDRE) == 0) ; // wait for TX buffer empty
     TDR1 = c;
+    return c;
 }
 
-void asci1_puts(const char* s)
-{
-    while(*s)
-    {
-        asci1_putc(*s++);
-    }
-}
-
-void asci1_put_hex1(const unsigned char n)
-{
-    if (n < 10)
-    {
-        asci1_putc(n + '0');
-    }
-    else
-    {
-        asci1_putc(n + 'A' - 10);
-    }
-}
-
-void asci1_put_hex2(const unsigned char h)
-{
-    asci1_put_hex1(h >> 4);
-    asci1_put_hex1(h & 0xf);
-}
-
-char asci1_getc(void)
+int getchar(void)
 {
     while ((STAT1 & STAT1_RDRF) == 0) ; // wait for RX data ready
     return RDR1;
@@ -221,7 +168,7 @@ static void TaskBlinkGreenLED(void *pvParameters)
     API function. */
     xLastWakeTime = xTaskGetTickCount();
 
-    asci1_puts("Hi from task TaskBlinkGreenLED\n");
+    printf("Hi from task TaskBlinkGreenLED\n");
 
 
     for(;;)
@@ -230,7 +177,7 @@ static void TaskBlinkGreenLED(void *pvParameters)
 
         xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
 
-        asci1_puts("Tick tick tick!\n");
+        printf("Tick tick tick %d!\n", xLastWakeTime);
         CNTLA0 |= CNTLA0_RTS0; // /RTS0 = 1, LED off
 
         xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
@@ -253,7 +200,7 @@ void main (void)
     asci0_init();
     asci1_init();
 
-    asci1_puts("\nFirmware built at " __DATE__ " " __TIME__ "\n");
+    printf("\nFirmware built at " __DATE__ " " __TIME__ "\n");
 
     lcd_init();
 
@@ -269,7 +216,7 @@ void main (void)
     CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
 
 
-    asci1_puts("Creating task\n");
+    printf("Creating task\n");
     BaseType_t res = xTaskCreate(
         TaskBlinkGreenLED
         ,  "GreenLED"
@@ -277,16 +224,13 @@ void main (void)
         ,  NULL
         ,  2
         ,  NULL ); //
-    asci1_puts("Created, ret = 0x"); asci1_put_hex2(res); asci1_putc('\n');
-    asci1_puts("Jumping in\n");
+    printf("Created, ret = 0x%.2x\n", res);
+    printf("Jumping in\n");
     vTaskStartScheduler();
 
     while (1)
     {
-
-        asci1_puts("Tick tick tick!\n");
-
-
+        printf("Shouldn't be here!\n");
         delay_ms(300);
     }
 }
