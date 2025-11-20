@@ -1,7 +1,39 @@
-#include <z180.h>
 #include <stdint.h>
-#include "z180_internal.h"
 #include <stdio.h>
+
+#include <z180.h>
+#include "z180_internal.h"
+
+/* Scheduler include files. */
+#include <FreeRTOS.h>
+#include <task.h>
+
+/**
+ * There's a 16C2550, both chip selects are used; however, the register mapping is a little
+ * bit odd. Register 0 for UART A is at 0x80, register 1 at 0x88, register 2 at 0x90, 3 at 0x98,
+ * 4 at 0xa0, 5 at 0xa8, 6 at 0xb0 and 7 at 0xb8. For UART B, the IO addresses are 0x81/89/91/99/a1/a9/b1/b9.
+ * NOTE: No IRQ :(
+ */
+
+// 0x80/88/90/98/a0/a8/b0/b8 -> UART_A
+__sfr __at (0x80) EXT_UARTA_RBR_THR_DLL;    /* Receiver buffer (read), transmitter holding register (write) / Divisor latch (LSB) */
+__sfr __at (0x88) EXT_UARTA_IER_DLM;        /* Interrupt enable register / Divisor latch (MSB) */
+__sfr __at (0x90) EXT_UARTA_IIR_FCR;        /* Interrupt identification register (read only) / FIFO control register (write) */
+__sfr __at (0x98) EXT_UARTA_LCR;            /* Line control register */
+__sfr __at (0xa0) EXT_UARTA_MCR;            /* Modem control register */
+__sfr __at (0xa8) EXT_UARTA_LSR;            /* Line status register */
+__sfr __at (0xb0) EXT_UARTA_MSR;            /* Modem status register */
+__sfr __at (0xb8) EXT_UARTA_SCR;            /* Scratch register */
+
+// 0x81/89/91/99/a1/a9/b1/b9 -> UART_B
+__sfr __at (0x81) EXT_UARTB_RBR_THR_DLL;    /* Receiver buffer (read), transmitter holding register (write) / Divisor latch (LSB) */
+__sfr __at (0x89) EXT_UARTB_IER_DLM;        /* Interrupt enable register / Divisor latch (MSB) */
+__sfr __at (0x91) EXT_UARTB_IIR_FCR;        /* Interrupt identification register (read only) / FIFO control register (write) */
+__sfr __at (0x99) EXT_UARTB_LCR;            /* Line control register */
+__sfr __at (0xa1) EXT_UARTB_MCR;            /* Modem control register */
+__sfr __at (0xa9) EXT_UARTB_LSR;            /* Line status register */
+__sfr __at (0xb1) EXT_UARTB_MSR;            /* Modem status register */
+__sfr __at (0xb9) EXT_UARTB_SCR;            /* Scratch register */
 
 /**
  * Standard HD44780 LCD at IO port 0x40 and 0x41. R/S connected directly to Z180's A0.
@@ -99,19 +131,19 @@ void delay_ms(unsigned int ms)
 
 void lcd_init(void)
 {
-    delay_ms(40);
+    vTaskDelay(pdMS_TO_TICKS(40));
     LCD_CMD = 0b00111000; // function set
-    delay_ms(15);
+    vTaskDelay(pdMS_TO_TICKS(15));
     LCD_CMD = 0b00000110; // Entry mode set
-    delay_ms(1);
+    vTaskDelay(pdMS_TO_TICKS(4));
     LCD_CMD = 0b00001111; // display on, cursor on, blink on
-    delay_us(40);
+    vTaskDelay(pdMS_TO_TICKS(40));
 }
 
 void lcd_clear(void)
 {
     LCD_CMD = 0x01;
-    delay_ms(15);
+    vTaskDelay(pdMS_TO_TICKS(15));
 }
 
 void lcd_setCursor(unsigned char row, unsigned char col)
@@ -122,7 +154,7 @@ void lcd_setCursor(unsigned char row, unsigned char col)
 void lcd_printChar(unsigned char b)
 {
     LCD_DATA = b;
-    delay_us(40);
+    vTaskDelay(pdMS_TO_TICKS(1));
 }
 
 void lcd_print(const char *s)
@@ -150,11 +182,6 @@ void lcd_put_hex2(const unsigned char h)
     lcd_put_hex1(h >> 4);
     lcd_put_hex1(h & 0xf);
 }
-
-
-/* Scheduler include files. */
-#include <FreeRTOS.h>
-#include <timers.h>
 
 /*-----------------------------------------------------------*/
 static void TaskBlinkGreenLED(void *pvParameters)
@@ -186,6 +213,7 @@ static void TaskBlinkGreenLED(void *pvParameters)
         //printf("GreenLED HighWater @ %u\r\n", uxTaskGetStackHighWaterMark(NULL));
     }
 }
+
 static void TaskUartServer(void *pvParameters)
 {
     (void) pvParameters;
@@ -193,6 +221,7 @@ static void TaskUartServer(void *pvParameters)
 
     for(;;)
     {
+        // use IRQ, not polling!
         xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 50 ) );
 
         if ((STAT1 & STAT1_RDRF) == 0)
@@ -205,6 +234,18 @@ static void TaskUartServer(void *pvParameters)
     }
 }
 
+static void TaskLcd(void *pvParameters)
+{
+    (void) pvParameters;
+    lcd_init();
+    lcd_print("Cocus was here!!");
+    lcd_setCursor(1, 0);
+    lcd_print(__DATE__ " " __TIME__);
+
+    vTaskSuspend(NULL);
+    vTaskDelete(NULL);
+}
+
 void int_init(void)
 {
     /* Table starts at 0xffe0 */
@@ -215,27 +256,28 @@ void int_init(void)
 
 void main (void)
 {
+    /* Setup the interrupt vector table addresses in RAM */
+    int_init();
+
     asci0_init();
     asci1_init();
 
     printf("\nFirmware built at " __DATE__ " " __TIME__ "\n");
-
-    lcd_init();
-
-    lcd_print("Cocus was here!!");
-
-    lcd_setCursor(1, 0);
-    lcd_print(__DATE__ " " __TIME__);
-
-    /* Setup the interrupt vector table addresses in RAM */
-    int_init();
+    printf("CPU frequency configured as "  string(__CPU_CLOCK) " Hz\n");
 
     /* I've connected an LED from Vcc to /RTS0 (free GPIO!) */
     CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
 
-
     printf("Creating task\n");
     BaseType_t res = xTaskCreate(
+        TaskLcd
+        ,  "LCD"
+        ,  128
+        ,  NULL
+        ,  1
+        ,  NULL ); //
+    printf("Created, ret = 0x%.2x\n", res);
+    res = xTaskCreate(
         TaskBlinkGreenLED
         ,  "GreenLED"
         ,  128

@@ -80,7 +80,7 @@
 #define configIDLE_SHOULD_YIELD             1
 #define configUSE_TICK_HOOK                 0
 
-#define configTOTAL_HEAP_SIZE               4096U
+#define configTOTAL_HEAP_SIZE               8192U
 
 /* Timer definitions. */
 #define configUSE_TIMERS                    1

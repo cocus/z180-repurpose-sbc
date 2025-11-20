@@ -5,6 +5,14 @@ NAME = z180
 CFLAGS = -mz180 --code-loc 0x0000 --data-loc 0x8000 --no-std-crt0 -Ifreertos/ -Ifreertos/include -D__CPU_CLOCK=18432000 -I.
 ASFLAGS = -plosgff
 
+all: size
+
+size: $(NAME).ihx $(NAME).map
+# horrible, but works :)
+	@echo "*          Code at 0x$$(grep '_CODE' $(NAME).map | sed -n '3 p' | cut -d 'E' -f2 | sed 's/^[ \t]*//;s/[ \t]*$$//' | cut -d ' ' -f1), 0x$$(grep '_GSFINAL' $(NAME).map | sed -n '3 p' | cut -d 'L' -f2 | sed 's/^[ \t]*//;s/[ \t]*$$//' | cut -d ' ' -f1) bytes"
+	@echo "*      RAM Data at 0x$$(grep '_DATA' $(NAME).map | sed -n '3 p' | cut -d 'A' -f3 | sed 's/^[ \t]*//;s/[ \t]*$$//' | cut -d ' ' -f1), 0x$$(grep '_DATA' $(NAME).map | sed -n '3 p' | cut -d 'A' -f3 | sed 's/^[ \t]*//;s/[ \t]*$$//' | cut -d ' ' -f5) bytes"
+	@echo "* RAM Init Data at 0x$$(grep '_INITIALIZED' $(NAME).map | sed -n '3 p' | cut -d 'D' -f2 | sed 's/^[ \t]*//;s/[ \t]*$$//' | cut -d ' ' -f1), 0x$$(grep '_INITIALIZED' $(NAME).map | sed -n '3 p' | cut -d 'D' -f2 | sed 's/^[ \t]*//;s/[ \t]*$$//' | cut -d ' ' -f5) bytes"
+
 $(NAME).ihx: $(OBJS)
 	@echo "LINK $^ -> $@"
 	@sdcc $(CFLAGS) $^ -o $@
