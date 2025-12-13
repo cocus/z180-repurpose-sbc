@@ -7,6 +7,7 @@
 /* Scheduler include files. */
 #include <FreeRTOS.h>
 #include <task.h>
+#include <queue.h>
 
 /* pff */
 #include <pff.h>
@@ -214,23 +215,78 @@ static void TaskBlinkGreenLED(void *pvParameters)
     }
 }
 
+uint16_t /* de */ *get_ivt(void) __naked
+{
+    __asm__(
+        "in0 a,(_IL)\n"
+        "and a, #0xe0\n"
+        "ld e, a\n"
+
+        "ld a, i\n"
+        "ld d, a\n"
+
+        "ret\n"
+    );
+}
+
+void ivt_set_handler(uint8_t offset, uint16_t fn)
+{
+    uint16_t *ivt = get_ivt();
+    ivt[offset>>1] = fn;
+}
+
+/* not sure why this doesn't work well, maybe because it's not stable on this z180 */
+TaskHandle_t uart_server;
+QueueHandle_t queue_uart;
+void asci1_irq(void) __critical __interrupt
+{
+    __asm__("di");
+    uint8_t b = RDR1;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if (STAT1 & (STAT1_OVRN | STAT1_FE | STAT1_PE))
+    {
+        CNTLA1 &= ~(CNTLA1_EFR); /* clear errors */
+        __asm__("ei");
+        return;
+    }
+    __asm__("ei");
+
+    xQueueSendFromISR(queue_uart, &b, &xHigherPriorityTaskWoken);
+    //vTaskNotifyGiveFromISR( uart_server, &xHigherPriorityTaskWoken );
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
 static void TaskUartServer(void *pvParameters)
 {
     (void)pvParameters;
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+    queue_uart = xQueueCreate(10, 1);
+
+    printf("uart_server task %x, pointer for irq is %x, queue is %x\n", uart_server, (uint16_t)&asci1_irq, queue_uart);
+
+    uint16_t *p = get_ivt();
+    ivt_set_handler(ASCI1_VECTOR, (uint16_t)&asci1_irq);
+    CNTLA1 &= ~(CNTLA1_EFR); /* clear errors */
+    (void)RDR1;
+    STAT1 |= STAT1_RIE; /* turn on IRQs */
+    uint8_t b = 0;
 
     for (;;)
     {
         // use IRQ, not polling!
-        xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
-
-        if ((STAT1 & STAT1_RDRF) == 0)
+        if (xQueueReceive(queue_uart, &b, pdMS_TO_TICKS(1000)) == pdPASS)
         {
-            continue;
+            printf("TASK %c\n", b);
+            if (STAT1 & STAT1_RDRF)
+            {
+                // echo it back
+                putchar(getchar());
+            }
         }
-
-        // echo it back
-        printf("%c", getchar());
+        else
+        {
+            //printf("task timeout\n");
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
     }
 }
 
@@ -299,7 +355,7 @@ static const struct
 {
     {TaskLcd, "LCD", 128, NULL, 1, NULL},
     {TaskBlinkGreenLED, "GreenLED", 128, NULL, 2, NULL},
-    {TaskUartServer, "UARTServer", 128, NULL, 1, NULL},
+    {TaskUartServer, "UARTServer", 256, NULL, 3, &uart_server},
     {TaskSD, "SD", 128, NULL, 1, NULL}
 };
 #define NUM_TASKS (sizeof(tasks)/sizeof(tasks[0]))

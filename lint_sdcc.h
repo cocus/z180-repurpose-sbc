@@ -19,7 +19,7 @@
 #define __reentrant
 #define __trap
 #define __critical
-#define __interrupt(x)
+#define __interrupt
 #define __using(x)
 #define __at(x)
 #define __naked

@@ -80,7 +80,7 @@
 #define configIDLE_SHOULD_YIELD             1
 #define configUSE_TICK_HOOK                 0
 
-#define configTOTAL_HEAP_SIZE               8192U
+#define configTOTAL_HEAP_SIZE               10*1024U
 
 /* Timer definitions. */
 #define configUSE_TIMERS                    1
@@ -101,7 +101,7 @@ to exclude the API function. */
 #define INCLUDE_xTaskResumeFromISR             1
 #define INCLUDE_xTaskDelayUntil                1
 #define INCLUDE_vTaskDelay                     1
-#define INCLUDE_xTaskGetSchedulerState         0
+#define INCLUDE_xTaskGetSchedulerState         1
 #define INCLUDE_xTaskGetCurrentTaskHandle      1
 #define INCLUDE_uxTaskGetStackHighWaterMark    1
 #define INCLUDE_xTaskGetIdleTaskHandle         0

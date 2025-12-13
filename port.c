@@ -56,14 +56,14 @@ extern volatile TCB_t * volatile pxCurrentTCB;
 #define TIMER_RLDRL "_RLDR0L"
 #define TIMER_RLDRH "_RLDR0H"
 #define TIMER_TMDRL "_TMDR0L"
-#define TIMER_IVT_OFF 4
+#define TIMER_IVT_OFF PRT0_VECTOR
 #else
 #define TIMER_TIE TCR_TIE1
 #define TIMER_TDE TCR_TDE1
 #define TIMER_RLDRL "_RLDR1L"
 #define TIMER_RLDRH "_RLDR1H"
 #define TIMER_TMDRL "_TMDR1L"
-#define TIMER_IVT_OFF 6
+#define TIMER_IVT_OFF PRT1_VECTOR
 #endif
 
 /*
@@ -96,7 +96,7 @@ extern volatile TCB_t * volatile pxCurrentTCB;
             "ld a, i                        \n" \
             "ld h, a                        \n" \
             "in0 a,(_IL)                    \n" \
-            "and a, #0xf0                   \n" \
+            "and a, #0xe0                   \n" \
             "or a, #"string(TIMER_IVT_OFF)" \n" \
             "ld l, a                        \n" \
             "ld (hl),e                      \n" \

@@ -255,7 +255,9 @@ extern void vPortYield( void );
 #define portYIELD()                 vPortYield()
 
 extern void vPortYieldFromISR( void );
-#define portYIELD_FROM_ISR()        vPortYieldFromISR()
+//#define portYIELD_FROM_ISR()        vPortYieldFromISR()
+#define portYIELD_FROM_ISR( xHigherPriorityTaskWoken )    do { if( xHigherPriorityTaskWoken != pdFALSE ) vPortYieldFromISR( ); } while( 0 )
+
 /*-----------------------------------------------------------*/
 
 /* Task function macros as described on the FreeRTOS.org WEB site. */
