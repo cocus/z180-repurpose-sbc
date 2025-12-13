@@ -8,8 +8,8 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-/* fatfs */
-#include <ff.h>
+/* pff */
+#include <pff.h>
 
 /**
  * There's a 16C2550, both chip selects are used; however, the register mapping is a little
@@ -198,8 +198,6 @@ static void TaskBlinkGreenLED(void *pvParameters)
     API function. */
     xLastWakeTime = xTaskGetTickCount();
 
-    printf("Hi from task TaskBlinkGreenLED\n");
-
     for (;;)
     {
         CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
@@ -248,8 +246,7 @@ static void TaskLcd(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-
-FATFS FatFs; /* FatFs work area needed for each volume */
+FATFS FatFs; /* FatFs work area */
 DIR Dir;     /* Directory object */
 FILINFO Finfo;
 
@@ -258,36 +255,28 @@ static void TaskSD(void *pvParameters)
     (void)pvParameters;
     FRESULT fr;
 
-    fr = f_mount(&FatFs, "0:", 1); /* Give a work area to the default drive */
+    fr = pf_mount(&FatFs);
     printf("Mount result = %d\n", fr);
 
-    //while(1) {
-        fr = f_opendir(&Dir, "0:/");
-        if (fr) {
-            printf("Opendir result = %d\n", fr);
-            vTaskSuspend(NULL);
-        }
+    fr = pf_opendir(&Dir, "");
+    if (fr)
+    {
+        printf("Opendir result = %d\n", fr);
+        vTaskSuspend(NULL);
+    }
 
-        for(;;) {
-            fr = f_readdir(&Dir, &Finfo);
-            if ((fr != FR_OK) || !Finfo.fname[0]) break;
+    for (;;)
+    {
+        fr = pf_readdir(&Dir, &Finfo); /* Read a directory item */
+        if (fr || !Finfo.fname[0])
+            break; /* Error or end of dir */
+        if (Finfo.fattrib & AM_DIR)
+            printf("   <dir>  %s\n", Finfo.fname);
+        else
+            printf("%8lu  %s\n", Finfo.fsize, Finfo.fname);
+    }
 
-            printf("%c%c%c%c%c %u/%02u/%02u %02u:%02u %9lu  %s\n",
-                        (Finfo.fattrib & AM_DIR) ? 'D' : '-',
-                        (Finfo.fattrib & AM_RDO) ? 'R' : '-',
-                        (Finfo.fattrib & AM_HID) ? 'H' : '-',
-                        (Finfo.fattrib & AM_SYS) ? 'S' : '-',
-                        (Finfo.fattrib & AM_ARC) ? 'A' : '-',
-                        (Finfo.fdate >> 9) + 1980, (Finfo.fdate >> 5) & 15, Finfo.fdate & 31,
-                        (Finfo.ftime >> 11), (Finfo.ftime >> 5) & 63,
-                        (DWORD)Finfo.fsize,
-                        Finfo.fname);
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(300));
-    //}
     vTaskSuspend(NULL);
-
 }
 
 void int_init(void)
@@ -298,6 +287,23 @@ void int_init(void)
     IL = 0xe0;
 }
 
+static const struct
+{
+    TaskFunction_t pxTaskCode;
+    const char *const pcName;
+    const uint16_t uxStackDepth;
+    void *const pvParameters;
+    UBaseType_t uxPriority;
+    TaskHandle_t *const pxCreatedTask;
+} tasks[] =
+{
+    {TaskLcd, "LCD", 128, NULL, 1, NULL},
+    {TaskBlinkGreenLED, "GreenLED", 128, NULL, 2, NULL},
+    {TaskUartServer, "UARTServer", 128, NULL, 1, NULL},
+    {TaskSD, "SD", 128, NULL, 1, NULL}
+};
+#define NUM_TASKS (sizeof(tasks)/sizeof(tasks[0]))
+
 void main(void)
 {
     /* Setup the interrupt vector table addresses in RAM */
@@ -307,29 +313,31 @@ void main(void)
     asci1_init();
 
     printf("\nFirmware built at " __DATE__ " " __TIME__ "\n");
-    printf("CPU frequency configured as " string(__CPU_CLOCK) " Hz\n");
+    printf("CPU phi = " string(__CPU_CLOCK) " Hz\n");
 
     /* I've connected an LED from Vcc to /RTS0 (free GPIO!) */
     CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
 
-    printf("Creating task\n");
-    BaseType_t res = xTaskCreate(
-        TaskLcd, "LCD", 128, NULL, 1, NULL); //
-    printf("Created, ret = 0x%.2x\n", res);
-    res = xTaskCreate(
-        TaskBlinkGreenLED, "GreenLED", 128, NULL, 2, NULL); //
-    printf("Created, ret = 0x%.2x\n", res);
-    res = xTaskCreate(
-        TaskUartServer, "UARTServer", 128, NULL, 1, NULL); //
-    res = xTaskCreate(
-        TaskSD, "SD", 512, NULL, 1, NULL); //
-    printf("Created, ret = 0x%.2x\n", res);
+    printf("Creating tasks:\n");
+
+    for (int i = 0; i < NUM_TASKS; i++)
+    {
+        BaseType_t res = xTaskCreate(
+            tasks[i].pxTaskCode,
+            tasks[i].pcName,
+            tasks[i].uxStackDepth,
+            tasks[i].pvParameters,
+            tasks[i].uxPriority,
+            tasks[i].pxCreatedTask
+        );
+        printf("Task '%s' created, ret = 0x%.2x\n", tasks[i].pcName, res);
+    }
+
     printf("Jumping in\n");
     vTaskStartScheduler();
 
     while (1)
     {
         printf("Shouldn't be here!\n");
-        delay_ms(300);
     }
 }

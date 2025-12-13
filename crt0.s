@@ -42,23 +42,24 @@ reset:
 init:
 	di
 	; CBAR
-	;ld      a, #0x80
-	ld		a, #0xC0
-	out0    (#0x3A), a       ; CA = 0x08, BA = 0x00
-	;; Common area 1 bottom = 0x8000 (upper 32k)
-	;; Bank area bottom = 0x0000 (lower 32k)
+	ld      hl, #s__DATA
+	ld 		a,h
+	out0    (#0x3A), a
+	;; Common area 1 bottom = DATA start (0xC000)
+	;; Bank area bottom = 0x0000 (flash until Common area 1 i.e. 0x0000 - 0xC000)
 
 	; BBR
 	ld      a, #0
 	out0    (#0x39), a        ; BBR = 0x00
 	;; Bank area phy = 0x00000
 
-							; Clear INT/TRAP Control Register (ITC)
-	out0 	(#0x34), a		; Disable all external interrupts.
-
 	; CBR
 	ld      a, #0x80
 	out0    (#0x38), a        ; CBR = 0x80
+	;; Common area phy = 0x80000
+
+							; Clear INT/TRAP Control Register (ITC)
+	out0 	(#0x34), a		; Disable all external interrupts.
 
 	;; Set stack pointer directly above top of memory.
 	ld	sp,#0xffff

@@ -67,6 +67,22 @@ static void init_spi(void)
         ; /* 10ms */
 }
 
+static BYTE bswap(
+    BYTE d) __naked
+{
+    (void)d;
+    __asm__(
+        "ld b,#8\n"
+        "ld c,#0\n"
+        "00001$:\n"
+        "rra\n"
+        "rl c\n"
+        "djnz 00001$\n"
+        "ld a,c\n"
+        "ret\n"
+    );
+}
+
 /*-----------------------------------------------------------------------*/
 /* Transmit bytes to the card (bitbanging)                               */
 /*-----------------------------------------------------------------------*/
@@ -80,17 +96,9 @@ static void xmit_mmc(
 
     do
     {
-        d = *buff++; /* Get a byte to be sent */
-
+        /* Get a byte to be sent */
         /* Sadly the CSI uses LSB first, so swap it */
-        d = ((d & 0b00000001) ? 0b10000000 : 0) |
-            ((d & 0b00000010) ? 0b01000000 : 0) |
-            ((d & 0b00000100) ? 0b00100000 : 0) |
-            ((d & 0b00001000) ? 0b00010000 : 0) |
-            ((d & 0b00010000) ? 0b00001000 : 0) |
-            ((d & 0b00100000) ? 0b00000100 : 0) |
-            ((d & 0b01000000) ? 0b00000010 : 0) |
-            ((d & 0b10000000) ? 0b00000001 : 0);
+        d = bswap(*buff++);
 
         /* b. Write the transmit data into TRDR. */
         TRDR = d;
@@ -128,18 +136,9 @@ static void rcvr_mmc(
         /* d. Read the receive data from TRDR. */
         r = TRDR;
 
-        /* Sadly the CSI uses LSB first, so swap it */
-        r = ((r & 0b00000001) ? 0b10000000 : 0) |
-            ((r & 0b00000010) ? 0b01000000 : 0) |
-            ((r & 0b00000100) ? 0b00100000 : 0) |
-            ((r & 0b00001000) ? 0b00010000 : 0) |
-            ((r & 0b00010000) ? 0b00001000 : 0) |
-            ((r & 0b00100000) ? 0b00000100 : 0) |
-            ((r & 0b01000000) ? 0b00000010 : 0) |
-            ((r & 0b10000000) ? 0b00000001 : 0);
-
         /* Store a received byte */
-        *buff++ = r;
+        /* Sadly the CSI uses LSB first, so swap it */
+        *buff++ = bswap(r);
     } while (--bc);
 }
 
