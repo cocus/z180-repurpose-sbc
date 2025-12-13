@@ -42,7 +42,8 @@ reset:
 init:
 	di
 	; CBAR
-	ld      a, #0x80
+	;ld      a, #0x80
+	ld		a, #0xC0
 	out0    (#0x3A), a       ; CA = 0x08, BA = 0x00
 	;; Common area 1 bottom = 0x8000 (upper 32k)
 	;; Bank area bottom = 0x0000 (lower 32k)

@@ -8,6 +8,9 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+/* fatfs */
+#include <ff.h>
+
 /**
  * There's a 16C2550, both chip selects are used; however, the register mapping is a little
  * bit odd. Register 0 for UART A is at 0x80, register 1 at 0x88, register 2 at 0x90, 3 at 0x98,
@@ -16,41 +19,42 @@
  */
 
 // 0x80/88/90/98/a0/a8/b0/b8 -> UART_A
-__sfr __at (0x80) EXT_UARTA_RBR_THR_DLL;    /* Receiver buffer (read), transmitter holding register (write) / Divisor latch (LSB) */
-__sfr __at (0x88) EXT_UARTA_IER_DLM;        /* Interrupt enable register / Divisor latch (MSB) */
-__sfr __at (0x90) EXT_UARTA_IIR_FCR;        /* Interrupt identification register (read only) / FIFO control register (write) */
-__sfr __at (0x98) EXT_UARTA_LCR;            /* Line control register */
-__sfr __at (0xa0) EXT_UARTA_MCR;            /* Modem control register */
-__sfr __at (0xa8) EXT_UARTA_LSR;            /* Line status register */
-__sfr __at (0xb0) EXT_UARTA_MSR;            /* Modem status register */
-__sfr __at (0xb8) EXT_UARTA_SCR;            /* Scratch register */
+__sfr __at(0x80) EXT_UARTA_RBR_THR_DLL; /* Receiver buffer (read), transmitter holding register (write) / Divisor latch (LSB) */
+__sfr __at(0x88) EXT_UARTA_IER_DLM;     /* Interrupt enable register / Divisor latch (MSB) */
+__sfr __at(0x90) EXT_UARTA_IIR_FCR;     /* Interrupt identification register (read only) / FIFO control register (write) */
+__sfr __at(0x98) EXT_UARTA_LCR;         /* Line control register */
+__sfr __at(0xa0) EXT_UARTA_MCR;         /* Modem control register */
+__sfr __at(0xa8) EXT_UARTA_LSR;         /* Line status register */
+__sfr __at(0xb0) EXT_UARTA_MSR;         /* Modem status register */
+__sfr __at(0xb8) EXT_UARTA_SCR;         /* Scratch register */
 
 // 0x81/89/91/99/a1/a9/b1/b9 -> UART_B
-__sfr __at (0x81) EXT_UARTB_RBR_THR_DLL;    /* Receiver buffer (read), transmitter holding register (write) / Divisor latch (LSB) */
-__sfr __at (0x89) EXT_UARTB_IER_DLM;        /* Interrupt enable register / Divisor latch (MSB) */
-__sfr __at (0x91) EXT_UARTB_IIR_FCR;        /* Interrupt identification register (read only) / FIFO control register (write) */
-__sfr __at (0x99) EXT_UARTB_LCR;            /* Line control register */
-__sfr __at (0xa1) EXT_UARTB_MCR;            /* Modem control register */
-__sfr __at (0xa9) EXT_UARTB_LSR;            /* Line status register */
-__sfr __at (0xb1) EXT_UARTB_MSR;            /* Modem status register */
-__sfr __at (0xb9) EXT_UARTB_SCR;            /* Scratch register */
+__sfr __at(0x81) EXT_UARTB_RBR_THR_DLL; /* Receiver buffer (read), transmitter holding register (write) / Divisor latch (LSB) */
+__sfr __at(0x89) EXT_UARTB_IER_DLM;     /* Interrupt enable register / Divisor latch (MSB) */
+__sfr __at(0x91) EXT_UARTB_IIR_FCR;     /* Interrupt identification register (read only) / FIFO control register (write) */
+__sfr __at(0x99) EXT_UARTB_LCR;         /* Line control register */
+__sfr __at(0xa1) EXT_UARTB_MCR;         /* Modem control register */
+__sfr __at(0xa9) EXT_UARTB_LSR;         /* Line status register */
+__sfr __at(0xb1) EXT_UARTB_MSR;         /* Modem status register */
+__sfr __at(0xb9) EXT_UARTB_SCR;         /* Scratch register */
 
 /**
  * Standard HD44780 LCD at IO port 0x40 and 0x41. R/S connected directly to Z180's A0.
  */
-__sfr __at (0x40) LCD_CMD;   /* */
-__sfr __at (0x41) LCD_DATA;  /* */
-
+__sfr __at(0x40) LCD_CMD;  /* */
+__sfr __at(0x41) LCD_DATA; /* */
 
 void asci0_putc(char c)
 {
-    while ((STAT0 & STAT0_TDRE) == 0) ; // wait for TX buffer empty
+    while ((STAT0 & STAT0_TDRE) == 0)
+        ; // wait for TX buffer empty
     TDR0 = c;
 }
 
 char asci0_getc(void)
 {
-    while ((STAT0 & STAT0_RDRF) == 0) ; // wait for RX data ready
+    while ((STAT0 & STAT0_RDRF) == 0)
+        ; // wait for RX data ready
     return RDR0;
 }
 
@@ -60,7 +64,7 @@ void asci0_init(void)
     // TE : Transmitter Enable
     // RTS: /RTS0 = 1
     // MOD2 : 8 bits data (No parity, 1 stop bit)
-    CNTLA0 = CNTLA0_RE|CNTLA0_RTS0|CNTLA0_TE|CNTLA0_MOD2;
+    CNTLA0 = CNTLA0_RE | CNTLA0_RTS0 | CNTLA0_TE | CNTLA0_MOD2;
 
     // DR=0 -> sampling rate = 16
     // PS=0 -> prescaler = /10
@@ -73,16 +77,18 @@ void asci0_init(void)
 }
 
 /* for sdcc's printf */
-int putchar (int c)
+int putchar(int c)
 {
-    while ((STAT1 & STAT1_TDRE) == 0) ; // wait for TX buffer empty
+    while ((STAT1 & STAT1_TDRE) == 0)
+        ; // wait for TX buffer empty
     TDR1 = c;
     return c;
 }
 
 int getchar(void)
 {
-    while ((STAT1 & STAT1_RDRF) == 0) ; // wait for RX data ready
+    while ((STAT1 & STAT1_RDRF) == 0)
+        ; // wait for RX data ready
     return RDR1;
 }
 
@@ -92,7 +98,7 @@ void asci1_init(void)
     // TE : Transmitter Enable
     // CKA1D : CKA1 is disabled (pin used as /TEND)
     // MOD2 : 8 bits data (No parity, 1 stop bit)
-    CNTLA1 = CNTLA1_RE|CNTLA1_TE|CNTLA1_CKA1D|CNTLA1_MOD2;
+    CNTLA1 = CNTLA1_RE | CNTLA1_TE | CNTLA1_CKA1D | CNTLA1_MOD2;
 
     // DR=0 -> sampling rate = 16
     // PS=0 -> prescaler = /10
@@ -103,8 +109,6 @@ void asci1_init(void)
     // Clear status (read)
     (void)STAT1;
 }
-
-
 
 void delay_us(unsigned int us)
 {
@@ -127,7 +131,6 @@ void delay_ms(unsigned int ms)
         delay_us(100);
     }
 }
-
 
 void lcd_init(void)
 {
@@ -159,7 +162,7 @@ void lcd_printChar(unsigned char b)
 
 void lcd_print(const char *s)
 {
-    while(*s)
+    while (*s)
     {
         lcd_printChar(*s++);
     }
@@ -186,7 +189,7 @@ void lcd_put_hex2(const unsigned char h)
 /*-----------------------------------------------------------*/
 static void TaskBlinkGreenLED(void *pvParameters)
 {
-    (void) pvParameters;
+    (void)pvParameters;
 
     TickType_t xLastWakeTime;
     /* The xLastWakeTime variable needs to be initialised with the current tick
@@ -197,32 +200,31 @@ static void TaskBlinkGreenLED(void *pvParameters)
 
     printf("Hi from task TaskBlinkGreenLED\n");
 
-
-    for(;;)
+    for (;;)
     {
         CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
 
-        xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
+        xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(75));
 
-        //printf("Tick tick tick %d!\n", xLastWakeTime);
+        // printf("Tick tick tick %d!\n", xLastWakeTime);
         CNTLA0 |= CNTLA0_RTS0; // /RTS0 = 1, LED off
 
-        xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 75 ) );
+        xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(75));
 
-        //printf("xTaskGetTickCount %u\r\n", xTaskGetTickCount());
-        //printf("GreenLED HighWater @ %u\r\n", uxTaskGetStackHighWaterMark(NULL));
+        // printf("xTaskGetTickCount %u\r\n", xTaskGetTickCount());
+        // printf("GreenLED HighWater @ %u\r\n", uxTaskGetStackHighWaterMark(NULL));
     }
 }
 
 static void TaskUartServer(void *pvParameters)
 {
-    (void) pvParameters;
+    (void)pvParameters;
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
-    for(;;)
+    for (;;)
     {
         // use IRQ, not polling!
-        xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( 50 ) );
+        xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
 
         if ((STAT1 & STAT1_RDRF) == 0)
         {
@@ -236,7 +238,7 @@ static void TaskUartServer(void *pvParameters)
 
 static void TaskLcd(void *pvParameters)
 {
-    (void) pvParameters;
+    (void)pvParameters;
     lcd_init();
     lcd_print("Cocus was here!!");
     lcd_setCursor(1, 0);
@@ -246,15 +248,57 @@ static void TaskLcd(void *pvParameters)
     vTaskDelete(NULL);
 }
 
+
+FATFS FatFs; /* FatFs work area needed for each volume */
+DIR Dir;     /* Directory object */
+FILINFO Finfo;
+
+static void TaskSD(void *pvParameters)
+{
+    (void)pvParameters;
+    FRESULT fr;
+
+    fr = f_mount(&FatFs, "0:", 1); /* Give a work area to the default drive */
+    printf("Mount result = %d\n", fr);
+
+    //while(1) {
+        fr = f_opendir(&Dir, "0:/");
+        if (fr) {
+            printf("Opendir result = %d\n", fr);
+            vTaskSuspend(NULL);
+        }
+
+        for(;;) {
+            fr = f_readdir(&Dir, &Finfo);
+            if ((fr != FR_OK) || !Finfo.fname[0]) break;
+
+            printf("%c%c%c%c%c %u/%02u/%02u %02u:%02u %9lu  %s\n",
+                        (Finfo.fattrib & AM_DIR) ? 'D' : '-',
+                        (Finfo.fattrib & AM_RDO) ? 'R' : '-',
+                        (Finfo.fattrib & AM_HID) ? 'H' : '-',
+                        (Finfo.fattrib & AM_SYS) ? 'S' : '-',
+                        (Finfo.fattrib & AM_ARC) ? 'A' : '-',
+                        (Finfo.fdate >> 9) + 1980, (Finfo.fdate >> 5) & 15, Finfo.fdate & 31,
+                        (Finfo.ftime >> 11), (Finfo.ftime >> 5) & 63,
+                        (DWORD)Finfo.fsize,
+                        Finfo.fname);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(300));
+    //}
+    vTaskSuspend(NULL);
+
+}
+
 void int_init(void)
 {
     /* Table starts at 0xffe0 */
-    __asm__("ld a, #0xff    \n"\
+    __asm__("ld a, #0xff    \n"
             "ld i, a        \n");
     IL = 0xe0;
 }
 
-void main (void)
+void main(void)
 {
     /* Setup the interrupt vector table addresses in RAM */
     int_init();
@@ -263,35 +307,22 @@ void main (void)
     asci1_init();
 
     printf("\nFirmware built at " __DATE__ " " __TIME__ "\n");
-    printf("CPU frequency configured as "  string(__CPU_CLOCK) " Hz\n");
+    printf("CPU frequency configured as " string(__CPU_CLOCK) " Hz\n");
 
     /* I've connected an LED from Vcc to /RTS0 (free GPIO!) */
     CNTLA0 &= ~(CNTLA0_RTS0); // /RTS0 = 0, LED on
 
     printf("Creating task\n");
     BaseType_t res = xTaskCreate(
-        TaskLcd
-        ,  "LCD"
-        ,  128
-        ,  NULL
-        ,  1
-        ,  NULL ); //
+        TaskLcd, "LCD", 128, NULL, 1, NULL); //
     printf("Created, ret = 0x%.2x\n", res);
     res = xTaskCreate(
-        TaskBlinkGreenLED
-        ,  "GreenLED"
-        ,  128
-        ,  NULL
-        ,  2
-        ,  NULL ); //
+        TaskBlinkGreenLED, "GreenLED", 128, NULL, 2, NULL); //
     printf("Created, ret = 0x%.2x\n", res);
     res = xTaskCreate(
-        TaskUartServer
-        ,  "UARTServer"
-        ,  128
-        ,  NULL
-        ,  1
-        ,  NULL ); //
+        TaskUartServer, "UARTServer", 128, NULL, 1, NULL); //
+    res = xTaskCreate(
+        TaskSD, "SD", 512, NULL, 1, NULL); //
     printf("Created, ret = 0x%.2x\n", res);
     printf("Jumping in\n");
     vTaskStartScheduler();
@@ -302,5 +333,3 @@ void main (void)
         delay_ms(300);
     }
 }
-
-
