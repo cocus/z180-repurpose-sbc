@@ -17,7 +17,7 @@ OBJS = crt0.rel \
 #		fatfs/ffunicode.rel
 H = z180_internal.h portmacro.h
 NAME = z180
-CFLAGS = -mz180 --opt-code-size --code-loc 0x0000 --data-loc 0xC000 --no-std-crt0 -Ifreertos/ -Ifreertos/include -I. -Ipffs/ -D__CPU_CLOCK=18432000
+CFLAGS = -mz180 --opt-code-size --code-loc 0x0000 --data-loc 0xC000 --no-std-crt0 -Ifreertos/ -Ifreertos/include -Ipffs/ -I. -D__CPU_CLOCK=18432000
 ASFLAGS = -plosgff
 
 all: size

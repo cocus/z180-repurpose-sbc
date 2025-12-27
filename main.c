@@ -12,6 +12,8 @@
 /* pff */
 #include <pff.h>
 
+#include <string.h>
+
 /**
  * There's a 16C2550, both chip selects are used; however, the register mapping is a little
  * bit odd. Register 0 for UART A is at 0x80, register 1 at 0x88, register 2 at 0x90, 3 at 0x98,
@@ -225,14 +227,13 @@ uint16_t /* de */ *get_ivt(void) __naked
         "ld a, i\n"
         "ld d, a\n"
 
-        "ret\n"
-    );
+        "ret\n");
 }
 
 void ivt_set_handler(uint8_t offset, uint16_t fn)
 {
     uint16_t *ivt = get_ivt();
-    ivt[offset>>1] = fn;
+    ivt[offset >> 1] = fn;
 }
 
 /* not sure why this doesn't work well, maybe because it's not stable on this z180 */
@@ -252,7 +253,7 @@ void asci1_irq(void) __critical __interrupt
     __asm__("ei");
 
     xQueueSendFromISR(queue_uart, &b, &xHigherPriorityTaskWoken);
-    //vTaskNotifyGiveFromISR( uart_server, &xHigherPriorityTaskWoken );
+    // vTaskNotifyGiveFromISR( uart_server, &xHigherPriorityTaskWoken );
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
@@ -284,7 +285,7 @@ static void TaskUartServer(void *pvParameters)
         }
         else
         {
-            //printf("task timeout\n");
+            // printf("task timeout\n");
             vTaskDelay(pdMS_TO_TICKS(200));
         }
     }
@@ -305,6 +306,82 @@ static void TaskLcd(void *pvParameters)
 FATFS FatFs; /* FatFs work area */
 DIR Dir;     /* Directory object */
 FILINFO Finfo;
+
+static const char *get_extension(const char *fname)
+{
+    size_t pos = 0;
+    for (; pos < 12; pos++)
+    {
+        if (fname[pos] != '.')
+            continue;
+        pos++;
+
+        return &fname[pos];
+    }
+
+    return NULL;
+}
+
+typedef struct { uint32_t magic; uint16_t div; uint32_t num_tp; uint32_t num_ev; } BinHeader;
+typedef struct { uint64_t tick; uint32_t msg; } Event;
+typedef struct { uint64_t tick; uint32_t us_qn; } Tempo;
+
+static void midiOutShortMsg(DWORD dwMsg)
+{
+    (void)dwMsg;
+    uint8_t st = dwMsg & 0x000000ff;
+    uint8_t data0 = (dwMsg >> 8) & 0x000000ff;
+    uint8_t data1 = (dwMsg >> 16) & 0x000000ff;
+}
+
+static void processMidiBin(FILINFO *finfo)
+{
+    UINT read = 0;
+    FRESULT fr;
+
+    fr = pf_open(finfo->fname);
+    if (fr != FR_OK)
+    {
+        printf("Error opening file, fr = %d\n", fr);
+        return;
+    }
+
+    BinHeader hdr = { 0 };
+
+    static Tempo tempos[64];
+
+    pf_read(&hdr, sizeof(hdr), &read);
+
+    pf_read(tempos, sizeof(tempos[0])*hdr.num_tp, &read);
+
+    float cur_us = 0.0;
+    uint64_t last_tick = 0;
+    Event curr_ev = { 0 };
+
+    for (uint32_t i = 0; i < hdr.num_ev; i++) {
+        pf_read(&curr_ev, sizeof(curr_ev), &read);
+
+        uint64_t t0 = last_tick, t1 = curr_ev.tick;
+        last_tick = t1;
+
+        float us = 0.0;
+        for (uint32_t j = 0; j < hdr.num_tp; j++) {
+            uint64_t a = tempos[j].tick;
+            uint64_t b = (j + 1 < hdr.num_tp) ? tempos[j + 1].tick : t1;
+            if (b <= t0 || a >= t1) continue;
+            if (a < t0) a = t0;
+            if (b > t1) b = t1;
+            us += (float)(b - a) * tempos[j].us_qn / hdr.div;
+        }
+        /* delay for "us" microseconds */
+        cur_us += us;
+
+        midiOutShortMsg(curr_ev.msg);
+    }
+
+    for (int ch = 0; ch < 16; ch++)
+        midiOutShortMsg(0xB0 | ch | (123 << 8));
+}
 
 static void TaskSD(void *pvParameters)
 {
@@ -329,7 +406,17 @@ static void TaskSD(void *pvParameters)
         if (Finfo.fattrib & AM_DIR)
             printf("   <dir>  %s\n", Finfo.fname);
         else
+        {
             printf("%8lu  %s\n", Finfo.fsize, Finfo.fname);
+            const char *extension = get_extension(Finfo.fname);
+            if (!extension)
+                continue;
+            if (memcmp("mbd", extension, 3) == 0)
+            {
+                printf("Processing binary MIDI file!\n");
+                processMidiBin(&Finfo);
+            }
+        }
     }
 
     vTaskSuspend(NULL);
@@ -356,9 +443,9 @@ static const struct
     {TaskLcd, "LCD", 128, NULL, 1, NULL},
     {TaskBlinkGreenLED, "GreenLED", 128, NULL, 2, NULL},
     {TaskUartServer, "UARTServer", 256, NULL, 3, &uart_server},
-    {TaskSD, "SD", 128, NULL, 1, NULL}
+    {TaskSD, "SD", 128, NULL, 4, NULL}
 };
-#define NUM_TASKS (sizeof(tasks)/sizeof(tasks[0]))
+#define NUM_TASKS (sizeof(tasks) / sizeof(tasks[0]))
 
 void main(void)
 {
@@ -384,8 +471,7 @@ void main(void)
             tasks[i].uxStackDepth,
             tasks[i].pvParameters,
             tasks[i].uxPriority,
-            tasks[i].pxCreatedTask
-        );
+            tasks[i].pxCreatedTask);
         printf("Task '%s' created, ret = 0x%.2x\n", tasks[i].pcName, res);
     }
 
